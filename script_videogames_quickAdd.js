@@ -70,20 +70,28 @@ async function start(params, settings) {
 	{
 		var developer = (selectedGame.involved_companies).find(element => element.developer);
 	}
-
 	
-	const isPlayed = await QuickAdd.quickAddApi.yesNoPrompt("Played ?");
+	// Get rating from aggregated_rating or rating and format it
 	let myRating = "/10";
-	let myRecommender = " ";
-	let comment = " ";
-
-	// If game already played, add a rating to it.
-	if(isPlayed){
-		myRating = await QuickAdd.quickAddApi.inputPrompt("Rating", null, "/10");
+	if(selectedGame.aggregated_rating) {
+		const ratingValue = (selectedGame.aggregated_rating / 10).toFixed(2);
+		myRating = `${ratingValue}/10`;
+	} else if(selectedGame.rating) {
+		const ratingValue = (selectedGame.rating / 10).toFixed(2);
+		myRating = `${ratingValue}/10`;
 	}
 
-	myRecommender = await QuickAdd.quickAddApi.inputPrompt("Recommender", null, " ");
-	comment = await QuickAdd.quickAddApi.inputPrompt("Comment", null, " ");
+	// Get download URL
+	let downloadUrl = await QuickAdd.quickAddApi.inputPrompt("Download URL", null, " ");
+	let downloadFormatted = " ";
+	if(downloadUrl && downloadUrl.trim() !== " " && downloadUrl.trim() !== "") {
+		downloadUrl = downloadUrl.trim();
+		// Add https:// if no protocol is specified
+		if (!downloadUrl.startsWith('http://') && !downloadUrl.startsWith('https://')) {
+			downloadUrl = 'https://' + downloadUrl;
+		}
+		downloadFormatted = downloadUrl;
+	}
 
 	QuickAdd.variables = {
 		...selectedGame,
@@ -92,6 +100,7 @@ async function start(params, settings) {
 		// POST request to IGDB in apiGet(query) uses IGDB API's expander syntax (see : https://api-docs.igdb.com/#expander)
 		genresFormatted: `${selectedGame.genres ? formatList((selectedGame.genres).map(item => item.name)) : " "}`,
 		gameModesFormatted: `${selectedGame.game_modes ? formatList((selectedGame.game_modes).map(item => item.name)) : " "}`,
+		themesFormatted: `${selectedGame.themes ? formatList((selectedGame.themes).map(item => item.name)) : " "}`,
 		//Developer name and logo
 		developerName: `${developer ? developer.company.name : " "}`,
 		developerLogo: `${developer ? (developer.company.logo ? ("https:" + developer.company.logo.url).replace("thumb", "logo_med") : " ") : " "}`,
@@ -99,16 +108,13 @@ async function start(params, settings) {
 		thumbnail: `${selectedGame.cover ? "https:" + (selectedGame.cover.url).replace("thumb", "cover_big") : " "}`,
 		// Release date is given as UNIX timestamp.
 		release: `${selectedGame.first_release_date ? (new Date((selectedGame.first_release_date*1000))).getFullYear() : " "}`,
-		// Squares of different color to tag Obsidian's note, depending if game has already been played or not.
-		tag: `${isPlayed ? "\u{0001F7E7}" : "\u{0001F7E5}"}`,
+		tag: " ",
 		// A short description of the game.
 		storylineFormatted: `${selectedGame.storyline ? (selectedGame.storyline).replace(/\r?\n|\r/g, " ") : " "}`,
+		summaryFormatted: `${selectedGame.summary ? (selectedGame.summary).replace(/\r?\n|\r/g, " ") : " "}`,
 		rating: myRating,
-		played: `${isPlayed ? "1" : "0"}`,
-		// Who recommended the game ?
-		recommender: myRecommender,
-		// A short personal comment on the game.
-		comment
+		// Download URL
+		download: downloadFormatted
 	};
 }
 
@@ -206,7 +212,7 @@ async function apiGet(query) {
 			// https://api-docs.igdb.com/#examples
 			// https://api-docs.igdb.com/#game
 			// https://api-docs.igdb.com/#expander
-			body: "fields name, first_release_date, involved_companies.developer, involved_companies.company.name, involved_companies.company.logo.url, url, cover.url, genres.name, game_modes.name, storyline; search \"" + query + "\"; limit 15;"
+			body: "fields name, first_release_date, involved_companies.developer, involved_companies.company.name, involved_companies.company.logo.url, url, cover.url, genres.name, game_modes.name, themes.name, storyline, summary, aggregated_rating, rating; search \"" + query + "\"; limit 15;"
 		})
 		
 		return JSON.parse(res);
